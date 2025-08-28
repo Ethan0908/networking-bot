@@ -1,43 +1,375 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>n8n Demo</title>
-    <style>
-      body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; }
-      form { display: grid; gap: 12px; }
-      input, button, textarea { padding: 10px; font-size: 16px; }
-      .ok { color: green; } .err { color: #b00020; }
-    </style>
-  </head>
-  <body>
-    <h1>Contact</h1>
-    <form id="f">
-      <input name="name" placeholder="Your name" required />
-      <input type="email" name="email" placeholder="Email" required />
-      <textarea name="message" placeholder="Message" required></textarea>
-      <button>Send</button>
-    </form>
-    <p id="out"></p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rolodex</title>
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      font-size: 16px;
+    }
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      width: 100%;
+      background: #f8f8f8;
+      border-bottom: 1px solid #ddd;
+      padding: 10px 16px;
+      box-sizing: border-box;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1;
+    }
+    main { width: 100%; max-width: 800px; padding: 16px; }
+    .stats span { margin-left: 12px; }
+    section { margin-bottom: 24px; }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #fff;
+    }
+    input, button, textarea, select { font-size: 14px; padding: 8px; margin-top: 4px; }
+    label { display: block; font-size: 14px; }
+    .contact-header { display: flex; justify-content: space-between; align-items: center; }
+    .chips span { display: inline-block; background: #eee; padding: 2px 6px; border-radius: 4px; margin-right: 4px; font-size: 12px; }
+    .badge { padding: 2px 6px; border-radius: 4px; color: #fff; font-size: 12px; }
+    .badge.fresh { background: #2e7d32; }
+    .badge.stale { background: #f9a825; }
+    .badge.quiet { background: #c62828; }
+    details { margin-top: 8px; }
+    footer { font-size: 12px; text-align: center; padding: 24px 0; color: #666; }
+    .hidden { display: none; }
+    .form-row { display: flex; flex-wrap: wrap; gap: 12px; }
+    .form-row > div { flex: 1; min-width: 160px; }
+    @media (min-width: 900px) {
+      .contacts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">Rolodex</div>
+    <div class="stats">
+      <span id="total">Total contacts: 0</span>
+      <span id="quietStat">Quiet: 0</span>
+    </div>
+  </header>
+  <main>
+    <section id="filters" class="card">
+      <div class="form-row">
+        <div>
+          <label for="search">Search</label>
+          <input id="search" placeholder="Name, company, or tag">
+        </div>
+        <div>
+          <label for="tagFilter">Tags</label>
+          <select id="tagFilter" multiple></select>
+        </div>
+        <div>
+          <label for="sort">Sort</label>
+          <select id="sort">
+            <option value="recent">Most recently contacted</option>
+            <option value="az">Alphabetical A–Z</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label><input type="checkbox" id="quietOnly"> Quiet only</label>
+        </div>
+        <div>
+          <label for="quietDays">Quiet if not contacted in days</label>
+          <input type="number" id="quietDays" value="30" min="1" style="width:80px;">
+        </div>
+      </div>
+    </section>
+    <section id="add" class="card">
+      <h2>Add Contact</h2>
+      <form id="addForm">
+        <div class="form-row">
+          <div>
+            <label for="fullName">Full name*</label>
+            <input id="fullName" required>
+          </div>
+          <div>
+            <label for="email">Email</label>
+            <input id="email" type="email">
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label for="title">Title</label>
+            <input id="title">
+          </div>
+          <div>
+            <label for="company">Company</label>
+            <input id="company">
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label for="linkedin">LinkedIn URL</label>
+            <input id="linkedin" type="url">
+          </div>
+          <div>
+            <label for="tags">Tags (comma separated)</label>
+            <input id="tags">
+          </div>
+        </div>
+        <div>
+          <label for="notes">Notes</label>
+          <textarea id="notes" rows="3"></textarea>
+        </div>
+        <button>Add</button>
+        <span id="addStatus" aria-live="polite"></span>
+      </form>
+    </section>
+    <section id="list">
+      <div id="emptyMessage" class="hidden">No contacts yet, add one above.</div>
+      <div id="noMatchesMessage" class="hidden">No matches. Try clearing filters.</div>
+      <div id="contacts" class="contacts-grid"></div>
+    </section>
+    <footer>&copy; Rolodex</footer>
+  </main>
+  <script>
+  (function(){
+    const contacts = JSON.parse(localStorage.getItem('contacts') || '[]');
+    let filters = { search:'', tags:[], sort:'recent', quietOnly:false, quietDays:30 };
 
-    <script>
-      const f = document.getElementById('f');
-      const out = document.getElementById('out');
+    const els = {
+      total: document.getElementById('total'),
+      quietStat: document.getElementById('quietStat'),
+      contacts: document.getElementById('contacts'),
+      empty: document.getElementById('emptyMessage'),
+      noMatches: document.getElementById('noMatchesMessage'),
+      search: document.getElementById('search'),
+      tagFilter: document.getElementById('tagFilter'),
+      sort: document.getElementById('sort'),
+      quietOnly: document.getElementById('quietOnly'),
+      quietDays: document.getElementById('quietDays'),
+      addForm: document.getElementById('addForm'),
+      addStatus: document.getElementById('addStatus')
+    };
 
-      f.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        out.textContent = 'Sending...';
-        const data = Object.fromEntries(new FormData(f).entries());
-        const r = await fetch('/api/flow', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-        const j = await r.json().catch(() => ({}));
-        if (r.ok) { out.className = 'ok'; out.textContent = 'Sent ✅'; f.reset(); }
-        else { out.className = 'err'; out.textContent = j.error || 'Error'; }
+    function saveContacts() {
+      localStorage.setItem('contacts', JSON.stringify(contacts));
+      updateStats();
+    }
+
+    function updateStats() {
+      els.total.textContent = 'Total contacts: ' + contacts.length;
+      const q = contacts.filter(c => daysSince(c.lastContacted) >= filters.quietDays).length;
+      els.quietStat.textContent = 'Quiet: ' + q;
+    }
+
+    function daysSince(date) {
+      if (!date) return Infinity;
+      const diff = Date.now() - new Date(date).getTime();
+      return Math.floor(diff / 86400000);
+    }
+
+    function badgeClass(days) {
+      if (days < 14) return 'fresh';
+      if (days < 30) return 'stale';
+      return 'quiet';
+    }
+
+    function renderTagsOptions() {
+      const tagSet = new Set();
+      contacts.forEach(c => c.tags.forEach(t => tagSet.add(t)));
+      const sel = els.tagFilter;
+      const prev = new Set(Array.from(sel.selectedOptions).map(o => o.value));
+      sel.innerHTML = '';
+      Array.from(tagSet).sort().forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t; opt.textContent = t;
+        if (prev.has(t)) opt.selected = true;
+        sel.appendChild(opt);
       });
-    </script>
-  </body>
+    }
+
+    function applyFilters(data) {
+      return data.filter(c => {
+        if (filters.search) {
+          const s = filters.search.toLowerCase();
+          const hay = [c.fullName, c.company, ...c.tags].join(' ').toLowerCase();
+          if (!hay.includes(s)) return false;
+        }
+        if (filters.tags.length && !filters.tags.every(t => c.tags.includes(t))) return false;
+        if (filters.quietOnly && daysSince(c.lastContacted) < filters.quietDays) return false;
+        return true;
+      }).sort((a,b) => {
+        if (filters.sort === 'recent') {
+          return new Date(b.lastContacted || 0) - new Date(a.lastContacted || 0);
+        } else {
+          return a.fullName.localeCompare(b.fullName);
+        }
+      });
+    }
+
+    function render() {
+      renderTagsOptions();
+      updateStats();
+      const data = applyFilters(contacts);
+      els.contacts.innerHTML = '';
+      if (!contacts.length) {
+        els.empty.classList.remove('hidden');
+        els.noMatches.classList.add('hidden');
+        return;
+      } else {
+        els.empty.classList.add('hidden');
+      }
+      if (!data.length) {
+        els.noMatches.classList.remove('hidden');
+        return;
+      } else {
+        els.noMatches.classList.add('hidden');
+      }
+
+      data.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const h = document.createElement('div');
+        h.className = 'contact-header';
+        const name = document.createElement('strong');
+        name.textContent = c.fullName;
+        const badge = document.createElement('span');
+        const d = daysSince(c.lastContacted);
+        badge.textContent = isFinite(d) ? d+'d' : '–';
+        badge.className = 'badge ' + badgeClass(d);
+        badge.title = c.lastContacted ? new Date(c.lastContacted).toLocaleDateString() : 'Never';
+        h.appendChild(name); h.appendChild(badge);
+        card.appendChild(h);
+
+        const tc = document.createElement('div');
+        tc.textContent = [c.title, c.company].filter(Boolean).join(' – ');
+        card.appendChild(tc);
+
+        const line = document.createElement('div');
+        if (c.email) {
+          const e = document.createElement('a');
+          e.href = 'mailto:'+c.email;
+          e.textContent = c.email;
+          line.appendChild(e);
+        }
+        if (c.linkedin) {
+          if (line.childNodes.length) line.appendChild(document.createTextNode(' '));
+          const l = document.createElement('a');
+          l.href = c.linkedin;
+          l.target = '_blank';
+          l.rel = 'noopener';
+          l.textContent = 'LinkedIn';
+          line.appendChild(l);
+        }
+        card.appendChild(line);
+
+        if (c.tags.length) {
+          const chips = document.createElement('div');
+          chips.className = 'chips';
+          c.tags.forEach(t => {
+            const span = document.createElement('span'); span.textContent = t; chips.appendChild(span);
+          });
+          card.appendChild(chips);
+        }
+
+        const msgDetails = document.createElement('details');
+        const msgSummary = document.createElement('summary');
+        msgSummary.textContent = 'Send message';
+        msgDetails.appendChild(msgSummary);
+        const msgForm = document.createElement('form');
+        const subLabel = document.createElement('label'); subLabel.textContent = 'Subject';
+        const subInput = document.createElement('input');
+        subInput.required = true;
+        const bodyLabel = document.createElement('label'); bodyLabel.textContent = 'Body';
+        const bodyInput = document.createElement('textarea'); bodyInput.rows = 3;
+        const sendBtn = document.createElement('button'); sendBtn.textContent = 'Send';
+        const msgOut = document.createElement('span'); msgOut.setAttribute('aria-live','polite');
+        msgForm.append(subLabel, subInput, bodyLabel, bodyInput, sendBtn, msgOut);
+        msgForm.addEventListener('submit', e=>{
+          e.preventDefault();
+          sendBtn.disabled = true;
+          msgOut.textContent = 'Sending...';
+          setTimeout(()=>{
+            sendBtn.disabled = false;
+            msgOut.textContent = 'Sent \u2713';
+            c.lastContacted = new Date().toISOString();
+            saveContacts();
+            render();
+          },500);
+        });
+        msgDetails.appendChild(msgForm);
+        card.appendChild(msgDetails);
+
+        const notesDetails = document.createElement('details');
+        const notesSummary = document.createElement('summary');
+        notesSummary.textContent = 'Notes';
+        notesDetails.appendChild(notesSummary);
+        const notesArea = document.createElement('textarea');
+        notesArea.rows = 3;
+        notesArea.value = c.notes || '';
+        const notesBtn = document.createElement('button'); notesBtn.textContent = 'Save notes';
+        const notesOut = document.createElement('span'); notesOut.setAttribute('aria-live','polite');
+        notesBtn.addEventListener('click', e=>{
+          e.preventDefault();
+          notesBtn.disabled = true;
+          notesOut.textContent = 'Saving...';
+          setTimeout(()=>{
+            notesBtn.disabled = false;
+            c.notes = notesArea.value;
+            saveContacts();
+            notesOut.textContent = 'Saved';
+          },300);
+        });
+        notesDetails.append(notesArea, notesBtn, notesOut);
+        card.appendChild(notesDetails);
+
+        els.contacts.appendChild(card);
+      });
+    }
+
+    els.search.addEventListener('input', () => { filters.search = els.search.value.trim(); render(); });
+    els.tagFilter.addEventListener('change', () => { filters.tags = Array.from(els.tagFilter.selectedOptions).map(o=>o.value); render(); });
+    els.sort.addEventListener('change', () => { filters.sort = els.sort.value; render(); });
+    els.quietOnly.addEventListener('change', () => { filters.quietOnly = els.quietOnly.checked; render(); });
+    els.quietDays.addEventListener('input', () => { filters.quietDays = parseInt(els.quietDays.value,10)||30; render(); });
+
+    els.addForm.addEventListener('submit', e=>{
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        fullName: document.getElementById('fullName').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        title: document.getElementById('title').value.trim(),
+        company: document.getElementById('company').value.trim(),
+        linkedin: document.getElementById('linkedin').value.trim(),
+        tags: document.getElementById('tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+        notes: document.getElementById('notes').value.trim(),
+        lastContacted: null
+      };
+      if (!data.fullName) return;
+      els.addStatus.textContent = 'Saving...';
+      setTimeout(()=>{
+        contacts.push(data);
+        saveContacts();
+        form.reset();
+        els.addStatus.textContent = 'Saved';
+        render();
+      },300);
+    });
+
+    render();
+  })();
+  </script>
+</body>
 </html>
