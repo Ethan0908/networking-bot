@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>n8n Demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; }
+      form { display: grid; gap: 12px; }
+      input, button, textarea { padding: 10px; font-size: 16px; }
+      .ok { color: green; } .err { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <h1>Contact</h1>
+    <form id="f">
+      <input name="name" placeholder="Your name" required />
+      <input type="email" name="email" placeholder="Email" required />
+      <textarea name="message" placeholder="Message" required></textarea>
+      <button>Send</button>
+    </form>
+    <p id="out"></p>
+
+    <script>
+      const f = document.getElementById('f');
+      const out = document.getElementById('out');
+
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        out.textContent = 'Sending...';
+        const data = Object.fromEntries(new FormData(f).entries());
+        const r = await fetch('/api/flow', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok) { out.className = 'ok'; out.textContent = 'Sent ✅'; f.reset(); }
+        else { out.className = 'err'; out.textContent = j.error || 'Error'; }
+      });
+    </script>
+  </body>
+</html>
