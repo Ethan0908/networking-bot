@@ -40,8 +40,7 @@
     }
     input, button, textarea, select { font-size: 14px; padding: 8px; margin-top: 4px; }
     label { display: block; font-size: 14px; }
-    .contact-header { display: flex; justify-content: space-between; align-items: center; }
-    .chips span { display: inline-block; background: #eee; padding: 2px 6px; border-radius: 4px; margin-right: 4px; font-size: 12px; }
+    .chip { display: inline-block; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 4px; }
     .badge { padding: 2px 6px; border-radius: 4px; color: #fff; font-size: 12px; }
     .badge.fresh { background: #2e7d32; }
     .badge.stale { background: #f9a825; }
@@ -240,21 +239,17 @@
         const card = document.createElement('div');
         card.className = 'card';
 
-        const h = document.createElement('div');
-        h.className = 'contact-header';
+        const nameLine = document.createElement('div');
         const name = document.createElement('strong');
         name.textContent = c.fullName;
-        const badge = document.createElement('span');
-        const d = daysSince(c.lastContacted);
-        badge.textContent = isFinite(d) ? d+'d' : '–';
-        badge.className = 'badge ' + badgeClass(d);
-        badge.title = c.lastContacted ? new Date(c.lastContacted).toLocaleDateString() : 'Never';
-        h.appendChild(name); h.appendChild(badge);
-        card.appendChild(h);
+        nameLine.appendChild(name);
+        card.appendChild(nameLine);
 
         const tc = document.createElement('div');
-        tc.textContent = [c.title, c.company].filter(Boolean).join(' – ');
-        card.appendChild(tc);
+        if (c.title || c.company) {
+          tc.textContent = [c.title, c.company].filter(Boolean).join(c.title && c.company ? ' @ ' : '');
+          card.appendChild(tc);
+        }
 
         const line = document.createElement('div');
         if (c.email) {
@@ -272,20 +267,31 @@
           l.textContent = 'LinkedIn';
           line.appendChild(l);
         }
+        c.tags.forEach(t => {
+          if (line.childNodes.length) line.appendChild(document.createTextNode(' '));
+          const span = document.createElement('span');
+          span.className = 'chip';
+          span.textContent = t;
+          line.appendChild(span);
+        });
         card.appendChild(line);
 
-        if (c.tags.length) {
-          const chips = document.createElement('div');
-          chips.className = 'chips';
-          c.tags.forEach(t => {
-            const span = document.createElement('span'); span.textContent = t; chips.appendChild(span);
-          });
-          card.appendChild(chips);
-        }
+        const lc = document.createElement('div');
+        const last = document.createElement('span');
+        last.textContent = 'Last contacted: ' + (c.lastContacted ? new Date(c.lastContacted).toLocaleDateString() : 'Never');
+        lc.appendChild(last);
+        const d = daysSince(c.lastContacted);
+        const badge = document.createElement('span');
+        badge.textContent = isFinite(d) ? d+'d' : '–';
+        badge.className = 'badge ' + badgeClass(d);
+        badge.title = c.lastContacted ? new Date(c.lastContacted).toLocaleDateString() : 'Never';
+        lc.appendChild(document.createTextNode(' '));
+        lc.appendChild(badge);
+        card.appendChild(lc);
 
         const msgDetails = document.createElement('details');
         const msgSummary = document.createElement('summary');
-        msgSummary.textContent = 'Send message';
+        msgSummary.textContent = 'Message';
         msgDetails.appendChild(msgSummary);
         const msgForm = document.createElement('form');
         const subLabel = document.createElement('label'); subLabel.textContent = 'Subject';
