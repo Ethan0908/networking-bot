@@ -2,41 +2,84 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>n8n Demo</title>
+    <title>Rolodex</title>
     <style>
-      body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; }
-      form { display: grid; gap: 12px; }
-      input, button, textarea { padding: 10px; font-size: 16px; }
-      .ok { color: green; } .err { color: #b00020; }
+      body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+      form, .card { border: 1px solid #ccc; padding: 12px; margin: 12px 0; border-radius: 8px; }
+      input, textarea, button { display: block; width: 100%; margin: 6px 0; padding: 8px; }
+      .status { font-size: 14px; color: green; }
+      .error { color: red; }
     </style>
   </head>
   <body>
-    <h1>Contact</h1>
-    <form id="f">
-      <input name="name" placeholder="Your name" required />
-      <input type="email" name="email" placeholder="Email" required />
-      <textarea name="message" placeholder="Message" required></textarea>
-      <button>Send</button>
+    <h1>Rolodex</h1>
+
+    <!-- Add Contact Form -->
+    <form id="addForm">
+      <input name="first_name" placeholder="First name" required />
+      <input name="last_name" placeholder="Last name" required />
+      <input name="email" type="email" placeholder="Email" />
+      <input name="company" placeholder="Company" />
+      <input name="role" placeholder="Role" />
+      <input name="source" placeholder="Source (e.g. LinkedIn)" />
+      <textarea name="notes" placeholder="Notes"></textarea>
+      <button>Add Contact</button>
+      <div id="addStatus"></div>
     </form>
-    <p id="out"></p>
+
+    <!-- Contact List -->
+    <h2>Contacts</h2>
+    <div id="list">Loading…</div>
 
     <script>
-      const f = document.getElementById('f');
-      const out = document.getElementById('out');
-
-      f.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        out.textContent = 'Sending...';
-        const data = Object.fromEntries(new FormData(f).entries());
-        const r = await fetch('/api/flow', {
+      async function addContact(data) {
+        const r = await fetch('/api/flow?action=add', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(data)
+          body: JSON.stringify({ ...data, status: 'new', unsubscribed: false })
         });
-        const j = await r.json().catch(() => ({}));
-        if (r.ok) { out.className = 'ok'; out.textContent = 'Sent ✅'; f.reset(); }
-        else { out.className = 'err'; out.textContent = j.error || 'Error'; }
+        return r.json();
+      }
+
+      async function listContacts() {
+        const r = await fetch('/api/flow?action=list');
+        return r.json();
+      }
+
+      function renderRows(rows) {
+        const list = document.getElementById('list');
+        if (!rows || !rows.length) {
+          list.textContent = 'No contacts yet.';
+          return;
+        }
+        list.innerHTML = rows.map(row => `
+          <div class="card">
+            <strong>${row.first_name || ''} ${row.last_name || ''}</strong><br>
+            ${row.role || ''} @ ${row.company || ''}<br>
+            ${row.email || ''}<br>
+            Source: ${row.source || ''} · Status: ${row.status || ''}<br>
+            Last sent: ${row.last_sent_at || '—'}
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('addForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        document.getElementById('addStatus').textContent = 'Saving…';
+        try {
+          await addContact(data);
+          document.getElementById('addStatus').textContent = 'Saved ✔';
+          e.target.reset();
+          renderRows(await listContacts());
+        } catch {
+          document.getElementById('addStatus').textContent = 'Error saving contact';
+        }
+      });
+
+      // load list on page open
+      listContacts().then(renderRows).catch(() => {
+        document.getElementById('list').textContent = 'Error loading contacts';
       });
     </script>
   </body>
